@@ -1,5 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>quadratic visible · intersection on both graphs</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
+        body { background: #eef2f7; margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .app { max-width: 1400px; width: 100%; background: rgba(255,255,255,0.75); backdrop-filter: blur(12px); border-radius: 48px; padding: 32px; box-shadow: 0 30px 60px rgba(0,10,30,0.25); }
+        h1 { font-weight: 500; font-size: 2.2rem; margin: 0 0 4px 0; color: #16202e; }
+        .sub { color: #2c405c; margin-bottom: 32px; font-size: 1.1rem; border-left: 5px solid #3f6a9c; padding-left: 20px; background: #dce5f0a0; border-radius: 0 40px 40px 0; }
+        .equation-row { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px; }
+        .line-editor { background: white; border-radius: 40px; padding: 22px 28px; flex: 1 1 400px; box-shadow: 0 12px 28px -8px rgba(0,20,40,0.1); border: 1px solid #ffffffaa; }
+        .line-editor h2 { font-size: 1.4rem; font-weight: 400; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; color: #1e2e47; }
+        .line-editor h2 span { background: #1e2e47; color: white; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+        .eq-visual { display: flex; align-items: center; gap: 8px; font-size: 1.4rem; color: #14212e; flex-wrap: wrap; }
+        .eq-visual input { font-size: 1.3rem; width: 90px; padding: 8px 10px; border: 2px solid #cbd5e2; border-radius: 24px; text-align: center; background: #f9fcff; font-weight: 500; }
+        .eq-visual input:focus { border-color: #3f6a9c; outline: none; box-shadow: 0 0 0 3px #a3c0e0; }
+        .eq-visual span { white-space: nowrap; }
+        .small-note { font-size: 0.8rem; color: #4f5f77; margin-top: 8px; }
+        .intersection-panel { background: #d9e2ef; border-radius: 60px; padding: 12px 24px; margin-bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 25px; }
+        .intersection-panel span { font-weight: 600; color: #1d2e48; }
+        .coord { background: white; padding: 6px 18px; border-radius: 40px; font-family: 'Fira Code', monospace; }
+        .control-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin: 20px 0 24px; }
+        .button-strip { display: flex; flex-wrap: wrap; gap: 14px; }
+        .button-strip button { background: white; border: 1.5px solid #b7c3d4; padding: 12px 28px; border-radius: 40px; font-weight: 600; font-size: 1rem; color: #1c2a3f; cursor: pointer; transition: 0.1s; box-shadow: 0 4px 8px #00000008; display: inline-flex; align-items: center; gap: 8px; }
+        .button-strip button.primary { background: #162e4a; color: white; border-color: #0a1a2c; }
+        .button-strip button.primary:hover { background: #23456b; }
+        .button-strip button:hover { background: #ebf0f8; border-color: #8f9fb8; }
+        .speed-control { display: flex; align-items: center; gap: 15px; background: #ffffffb8; padding: 8px 22px; border-radius: 40px; border: 1px solid #b7c3d4; }
+        .speed-control label { font-weight: 600; color: #1e2e47; }
+        .speed-control input { width: 160px; }
+        #speedValue { font-weight: 600; min-width: 40px; display: inline-block; color: #162e4a; }
+        .graph-pair { display: flex; flex-wrap: wrap; gap: 25px; margin-bottom: 30px; }
+        .graph-card { background: #ffffffd9; backdrop-filter: blur(4px); border-radius: 36px; padding: 18px 18px 12px; flex: 1 1 400px; box-shadow: inset 0 1px 3px white, 0 20px 30px -12px #1e314450; }
+        .graph-card h3 { margin: 0 0 12px 8px; font-weight: 400; color: #1f2f45; }
+        canvas { display: block; width: 100%; height: auto; background: #fbfdff; border-radius: 24px; border: 1px solid #ced9e9; }
+        .graph-footer { display: flex; justify-content: space-between; margin: 12px 6px 0; font-size: 1rem; align-items: center; flex-wrap: wrap; }
+        .product-equation { background: #e4ecf9; padding: 5px 16px; border-radius: 40px; font-family: 'Fira Code', monospace; font-weight: 600; }
+        .line-animation-info { background: #eaf0f9; border-radius: 40px; padding: 8px 18px; font-family: 'Fira Code', monospace; font-size: 0.9rem; }
+        .json-section { background: #dae2ee70; border-radius: 60px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 10px; }
+        .json-section label { background: white; padding: 8px 22px; border-radius: 30px; border: 1px solid #8f9fb8; font-weight: 500; cursor: pointer; }
+        #importFile { display: none; }
+        .pairs-container { margin-top: 24px; background: #edf2f9; border-radius: 48px; padding: 22px; }
+        .pairs-container h4 { margin: 0 0 16px 8px; font-weight: 400; color: #1d2a41; font-size: 1.3rem; }
+        .pair-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+        .pair-chip { background: white; border: 1px solid #9dafca; border-radius: 60px; padding: 10px 24px; font-size: 1.1rem; font-family: 'Fira Code', monospace; box-shadow: 0 3px 8px #0000000a; cursor: pointer; transition: 0.1s; color: #102331; font-weight: 500; }
+        .pair-chip:hover { background: #d4e0f2; border-color: #3f6a9c; transform: translateY(-2px); }
+        .warning { color: #b02e2e; font-weight: 500; margin-left: 15px; }
+        footer { text-align: right; margin-top: 16px; color: #4c607c; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <h1>✖️ visible quadratic · intersection on both</h1>
+    <div class="sub">m₁·y = m₂·x + c  &nbsp; | &nbsp; dynamic grid, axes with tick marks</div>
+
+    <!-- line editors with three parameters -->
+    <div class="equation-row">
+        <div class="line-editor">
+            <h2><span>1</span> line 1</h2>
+            <div class="eq-visual">
+                <input type="number" id="a1" value="1.0" step="any" placeholder="m₁"> <span>· y =</span>
+                <input type="number" id="b1" value="1.0" step="any" placeholder="m₂"> <span>· x +</span>
+                <input type="number" id="c1" value="0.0" step="any" placeholder="c">
+            </div>
+            <div class="small-note">form: (m₁)y = (m₂)x + c</div>
+        </div>
+        <div class="line-editor">
+            <h2><span>2</span> line 2</h2>
+            <div class="eq-visual">
+                <input type="number" id="a2" value="1.0" step="any" placeholder="m₁"> <span>· y =</span>
+                <input type="number" id="b2" value="1.0" step="any" placeholder="m₂"> <span>· x +</span>
+                <input type="number" id="c2" value="2.0" step="any" placeholder="c">
+            </div>
+            <div class="small-note">form: (m₁)y = (m₂)x + c</div>
+        </div>
+    </div>
+
+    <!-- intersection display -->
+    <div class="intersection-panel">
+        <span>📍 intersection</span>
+        <span class="coord" id="intersectX">x = —</span>
+        <span class="coord" id="intersectY">y = —</span>
+        <span class="warning" id="parallelMsg"></span>
+        <button id="zoomFitBtn" class="primary" style="margin-left:auto;">⤢ center & fit all</button>
+    </div>
+
+    <!-- control panel -->
+    <div class="control-panel">
+        <div class="button-strip">
+            <button id="drawLinesBtn" class="primary">📈 redraw & scale</button>
+            <button id="animateLinesBtn" class="primary">▶ animate lines (0→+) (0→-)</button>
+            <button id="calcProductBtn" class="primary">✨ animate product curve*</button>
+            <button id="exportBtn">⬇️ export current pair</button>
+            <label for="importFile">📂 import JSON</label>
+            <input type="file" id="importFile" accept=".json,application/json">
+        </div>
+        <div class="speed-control">
+            <label>speed <span id="speedValue">1.0</span></label>
+            <input type="range" id="speedSlider" min="0.2" max="3.0" step="0.1" value="1.0">
+        </div>
+    </div>
+
+    <!-- two graphs -->
+    <div class="graph-pair">
+        <div class="graph-card">
+            <h3>📉 two lines (origin centered)</h3>
+            <canvas id="linearCanvas" width="500" height="400"></canvas>
+            <div class="graph-footer">
+                <span>L₁: <span id="eq1Display">1.0 y = 1.0 x + 0.0</span></span>
+                <span>L₂: <span id="eq2Display">1.0 y = 1.0 x + 2.0</span></span>
+                <span class="line-animation-info" id="lineAnimInfo">x: — , y₁: — , y₂: —</span>
+            </div>
+        </div>
+        <div class="graph-card">
+            <h3>🪄 product (quadratic)</h3>
+            <canvas id="quadCanvas" width="500" height="400"></canvas>
+            <div class="graph-footer">
+                <span class="product-equation" id="productEquation">y = 1.00x² + 2.00x + 0.00</span>
+                <span id="animIndicator">⏸️ static</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- imported pairs container (clickable) -->
+    <div class="pairs-container" id="pairsContainer">
+        <h4>📋 click any imported pair to load (supports old y=mx+b format)</h4>
+        <div class="pair-buttons" id="pairButtonsList">
+            <span style="color:#5a6f8a; padding-left:10px;">— import a JSON file to see sets —</span>
+        </div>
+    </div>
+
+    <footer>* product uses y = (m₂/m₁)x + c/m₁  (only if m₁≠0) | axes have tick marks at dynamic intervals</footer>
+</div>
+
+<script>
 (function() {
-    // ...
+    // DOM elements
+    const a1 = document.getElementById('a1'), b1 = document.getElementById('b1'), c1 = document.getElementById('c1');
+    const a2 = document.getElementById('a2'), b2 = document.getElementById('b2'), c2 = document.getElementById('c2');
+    const eq1Span = document.getElementById('eq1Display');
+    const eq2Span = document.getElementById('eq2Display');
+    const intersectXSpan = document.getElementById('intersectX');
+    const intersectYSpan = document.getElementById('intersectY');
+    const parallelMsg = document.getElementById('parallelMsg');
+    const linearCanvas = document.getElementById('linearCanvas');
+    const quadCanvas = document.getElementById('quadCanvas');
+    const ctxLin = linearCanvas.getContext('2d');
+    const ctxQuad = quadCanvas.getContext('2d');
+    const productSpan = document.getElementById('productEquation');
+    const animIndicator = document.getElementById('animIndicator');
+    const lineAnimInfo = document.getElementById('lineAnimInfo');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const drawLinesBtn = document.getElementById('drawLinesBtn');
+    const animateLinesBtn = document.getElementById('animateLinesBtn');
+    const calcProductBtn = document.getElementById('calcProductBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importFile = document.getElementById('importFile');
+    const zoomFitBtn = document.getElementById('zoomFitBtn');
+    const pairButtonsList = document.getElementById('pairButtonsList');
+
+    // Dynamic bounds (symmetric around 0)
+    let X_MAX = 5, Y_MAX = 5;   // half-ranges
+    let X_MIN = -5, Y_MIN = -5;
+
+    // Intersection point
+    let intersection = { x: null, y: null, valid: false };
+
+    // Animation state
+    let animFrame = null, linesAnimFrame = null;
+    let isProductAnimating = false, isLinesAnimating = false;
+    let productAnimProgress = 0, targetProductFunc = null;
+    let linesAnimPhase = 0, linesAnimX = 0;
+
+    // Imported pairs
+    let importedPairs = [];
+
+    // ----- helpers: map coordinates to canvas (using current bounds) -----
+    function mapX(coordX, w) { return ((coordX - X_MIN) / (X_MAX - X_MIN)) * w; }
+    function mapY(coordY, h) { return h * (1 - (coordY - Y_MIN) / (Y_MAX - Y_MIN)); }
+
+    // ----- compute intersection using Cramer -----
+    function computeIntersection() {
+        const a1v = parseFloat(a1.value) || 0;
+        const b1v = parseFloat(b1.value) || 0;
+        const c1v = parseFloat(c1.value) || 0;
+        const a2v = parseFloat(a2.value) || 0;
+        const b2v = parseFloat(b2.value) || 0;
+        const c2v = parseFloat(c2.value) || 0;
+
+        // system: -b1*x + a1*y = c1   ;   -b2*x + a2*y = c2
+        const det = a1v * b2v - a2v * b1v;
+        if (Math.abs(det) < 1e-12) {
+            intersection.valid = false;
+            intersection.x = null; intersection.y = null;
+            parallelMsg.innerText = '⚠️ parallel or coincident';
+            return;
+        }
+        const x = (c1v * a2v - a1v * c2v) / det;
+        const y = (b2v * c1v - b1v * c2v) / det;
+        intersection.x = x; intersection.y = y; intersection.valid = true;
+        parallelMsg.innerText = '';
+        intersectXSpan.innerText = `x = ${x.toFixed(3)}`;
+        intersectYSpan.innerText = `y = ${y.toFixed(3)}`;
+    }
+
+    // ----- nice step for grid -----
+    function niceStep(range, approxSteps = 8) {
+        const roughStep = range / approxSteps;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+        const norm = roughStep / magnitude;
+        if (norm < 1.5) return 1 * magnitude;
+        if (norm < 3) return 2 * magnitude;
+        if (norm < 7) return 5 * magnitude;
+        return 10 * magnitude;
+    }
+
+    // ----- adjust bounds to symmetric around 0, including intersection and quadratic curve -----
+    function adjustBoundsCentered() {
+        computeIntersection();  // refresh intersection
+
+        // start with default half-ranges
+        let requiredX = 5;
+        let requiredY = 5;
+
+        if (intersection.valid) {
+            requiredX = Math.max(requiredX, Math.abs(intersection.x) + 1.5);
+            requiredY = Math.max(requiredY, Math.abs(intersection.y) + 1.5);
+        }
+
+        // consider quadratic curve range (if both lines are solvable for y)
+        const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
+        const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
+
+        if (Math.abs(a1v) > 1e-12 && Math.abs(a2v) > 1e-12) {
+            const m1 = b1v / a1v, b1_ = c1v / a1v;
+            const m2 = b2v / a2v, b2_ = c2v / a2v;
+            const A = m1 * m2;
+            const B = m1 * b2_ + m2 * b1_;
+            const C = b1_ * b2_;
+
+            // also include vertex x to possibly expand x range
+            if (Math.abs(A) > 1e-12) {
+                const vertexX = -B / (2 * A);
+                if (isFinite(vertexX)) {
+                    requiredX = Math.max(requiredX, Math.abs(vertexX) + 1.5);
+                }
+            }
+
+            // now set X range based on requiredX
+            X_MAX = requiredX;
+            X_MIN = -requiredX;
+
+            // evaluate y at key points to expand Y range
+            let yMin = Infinity, yMax = -Infinity;
+            const evalX = [X_MIN, X_MAX, 0];
+            if (intersection.valid && intersection.x >= X_MIN && intersection.x <= X_MAX) {
+                evalX.push(intersection.x);
+            }
+            for (let x of evalX) {
+                const y = A*x*x + B*x + C;
+                if (isFinite(y)) {
+                    yMin = Math.min(yMin, y);
+                    yMax = Math.max(yMax, y);
+                }
+            }
+            // vertex if within x range
+            if (Math.abs(A) > 1e-12) {
+                const vertexX = -B / (2 * A);
+                if (vertexX >= X_MIN && vertexX <= X_MAX) {
+                    const y = A*vertexX*vertexX + B*vertexX + C;
+                    if (isFinite(y)) {
+                        yMin = Math.min(yMin, y);
+                        yMax = Math.max(yMax, y);
+                    }
+                }
+            }
+
+            if (isFinite(yMin) && isFinite(yMax)) {
+                requiredY = Math.max(requiredY, Math.max(Math.abs(yMin), Math.abs(yMax)) + 1.5);
+            }
+        }
+
+        X_MAX = requiredX;
+        X_MIN = -requiredX;
+        Y_MAX = requiredY;
+        Y_MIN = -requiredY;
+    }
+
+    // ----- draw grid with dynamic steps and tick marks on axes -----
     function drawGrid(ctx, w, h) {
         ctx.clearRect(0, 0, w, h);
         ctx.save();
@@ -15,7 +306,7 @@
             ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
         }
 
-        const yStep = 1;
+        const yStep = niceStep(Y_MAX - Y_MIN, 8);
         for (let y = Math.ceil(Y_MIN / yStep) * yStep; y <= Y_MAX; y += yStep) {
             if (Math.abs(y) < 0.001) continue;
             const cy = mapY(y, h);
@@ -39,7 +330,9 @@
         for (let x = Math.ceil(X_MIN / xStep) * xStep; x <= X_MAX; x += xStep) {
             if (Math.abs(x) < 0.001) continue; // skip zero (already labeled by intersection maybe)
             const cx = mapX(x, w);
+            // tick above axis (since axis is at yZero)
             ctx.beginPath(); ctx.moveTo(cx, yZero - 5); ctx.lineTo(cx, yZero + 5); ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
+            // label
             ctx.fillStyle = '#2f405c';
             ctx.fillText(x.toFixed(xStep < 0.1 ? 2 : 0), cx, yZero + 8);
         }
@@ -48,10 +341,12 @@
         for (let y = Math.ceil(Y_MIN / yStep) * yStep; y <= Y_MAX; y += yStep) {
             if (Math.abs(y) < 0.001) continue;
             const cy = mapY(y, h);
+            // tick right of axis
             ctx.beginPath(); ctx.moveTo(xZero - 5, cy); ctx.lineTo(xZero + 5, cy); ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
+            // label (to the left for negative x, right for positive? just left if room)
             ctx.fillStyle = '#2f405c';
             ctx.textAlign = 'right';
-            ctx.fillText(y.toFixed(0), xZero - 10, cy - 6);
+            ctx.fillText(y.toFixed(yStep < 0.1 ? 2 : 0), xZero - 10, cy - 6);
         }
 
         // Label origin (0) once
@@ -61,5 +356,383 @@
 
         ctx.restore();
     }
-    // ...
+
+    // ----- plot a line from equation a*y = b*x + c -----
+    function plotLine(ctx, a, b, c, color, dash = false, w, h) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3.2;
+        ctx.setLineDash(dash ? [8, 5] : []);
+        if (Math.abs(a) > 1e-12) {
+            // y = (b/a)x + c/a
+            const slope = b / a;
+            const intercept = c / a;
+            const x1 = X_MIN, y1 = slope * x1 + intercept;
+            const x2 = X_MAX, y2 = slope * x2 + intercept;
+            ctx.beginPath();
+            ctx.moveTo(mapX(x1, w), mapY(y1, h));
+            ctx.lineTo(mapX(x2, w), mapY(y2, h));
+            ctx.stroke();
+        } else {
+            // vertical line: b*x + c = 0   => x = -c/b   (b != 0)
+            if (Math.abs(b) > 1e-12) {
+                const xVert = -c / b;
+                if (xVert >= X_MIN && xVert <= X_MAX) {
+                    const cx = mapX(xVert, w);
+                    ctx.beginPath();
+                    ctx.moveTo(cx, 0);
+                    ctx.lineTo(cx, h);
+                    ctx.stroke();
+                }
+            } // else degenerate, nothing
+        }
+        ctx.restore();
+    }
+
+    // ----- draw intersection label on canvas -----
+    function drawIntersectionLabel(ctx, w, h) {
+        if (!intersection.valid) return;
+        const x = intersection.x, y = intersection.y;
+        const cx = mapX(x, w), cy = mapY(y, h);
+        // draw small circle
+        ctx.beginPath();
+        ctx.fillStyle = '#000';
+        ctx.arc(cx, cy, 6, 0, 2*Math.PI);
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px "Fira Code", monospace';
+        ctx.shadowColor = 'white'; ctx.shadowBlur = 6;
+        ctx.fillText(` (${x.toFixed(2)}, ${y.toFixed(2)})`, cx + 8, cy - 8);
+        ctx.shadowColor = 'transparent';
+    }
+
+    // ----- draw both lines (static full) -----
+    function drawLinesStatic() {
+        const w = linearCanvas.width, h = linearCanvas.height;
+        drawGrid(ctxLin, w, h);
+
+        const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
+        const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
+
+        eq1Span.innerText = `${a1v.toFixed(2)} y = ${b1v.toFixed(2)} x + ${c1v.toFixed(2)}`;
+        eq2Span.innerText = `${a2v.toFixed(2)} y = ${b2v.toFixed(2)} x + ${c2v.toFixed(2)}`;
+
+        plotLine(ctxLin, a1v, b1v, c1v, '#c2314a', false, w, h);
+        plotLine(ctxLin, a2v, b2v, c2v, '#1e7a5c', true, w, h);
+        drawIntersectionLabel(ctxLin, w, h);
+    }
+
+    // ----- draw lines with animation up to currentX -----
+    function drawLinesAnimated(currentX) {
+        const w = linearCanvas.width, h = linearCanvas.height;
+        drawGrid(ctxLin, w, h);
+
+        const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
+        const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
+
+        // draw full lines faintly
+        ctxLin.save();
+        ctxLin.globalAlpha = 0.2;
+        plotLine(ctxLin, a1v, b1v, c1v, '#888', false, w, h);
+        plotLine(ctxLin, a2v, b2v, c2v, '#888', true, w, h);
+        ctxLin.restore();
+
+        // draw animated segment from 0 to currentX (solid)
+        ctxLin.save();
+        ctxLin.lineWidth = 4;
+        ctxLin.setLineDash([]);
+        if (Math.abs(a1v) > 1e-12) {
+            const slope1 = b1v / a1v, intercept1 = c1v / a1v;
+            const yStart = slope1 * 0 + intercept1;
+            const yEnd = slope1 * currentX + intercept1;
+            ctxLin.strokeStyle = '#c2314a';
+            ctxLin.beginPath();
+            ctxLin.moveTo(mapX(0, w), mapY(yStart, h));
+            ctxLin.lineTo(mapX(currentX, w), mapY(yEnd, h));
+            ctxLin.stroke();
+            // dot at current
+            ctxLin.beginPath(); ctxLin.fillStyle = '#c2314a';
+            ctxLin.arc(mapX(currentX, w), mapY(yEnd, h), 6, 0, 2*Math.PI); ctxLin.fill();
+        } else if (Math.abs(b1v) > 1e-12) {
+            // vertical line – animation not really applicable, skip or draw point
+        }
+
+        if (Math.abs(a2v) > 1e-12) {
+            const slope2 = b2v / a2v, intercept2 = c2v / a2v;
+            const yStart2 = slope2 * 0 + intercept2;
+            const yEnd2 = slope2 * currentX + intercept2;
+            ctxLin.strokeStyle = '#1e7a5c';
+            ctxLin.beginPath();
+            ctxLin.moveTo(mapX(0, w), mapY(yStart2, h));
+            ctxLin.lineTo(mapX(currentX, w), mapY(yEnd2, h));
+            ctxLin.stroke();
+            ctxLin.beginPath(); ctxLin.fillStyle = '#1e7a5c';
+            ctxLin.arc(mapX(currentX, w), mapY(yEnd2, h), 6, 0, 2*Math.PI); ctxLin.fill();
+        }
+        ctxLin.restore();
+
+        // always draw intersection label
+        drawIntersectionLabel(ctxLin, w, h);
+
+        // update info
+        let y1 = '?', y2 = '?';
+        if (Math.abs(a1v) > 1e-12) y1 = ((b1v/a1v)*currentX + c1v/a1v).toFixed(2);
+        if (Math.abs(a2v) > 1e-12) y2 = ((b2v/a2v)*currentX + c2v/a2v).toFixed(2);
+        lineAnimInfo.innerText = `x: ${currentX.toFixed(2)}  y₁: ${y1}  y₂: ${y2}`;
+    }
+
+    // ----- product function (only if both a != 0) -----
+    function updateProductFunction() {
+        const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
+        const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
+        if (Math.abs(a1v) < 1e-12 || Math.abs(a2v) < 1e-12) {
+            productSpan.innerText = 'product undefined (vertical line)';
+            return (x) => NaN;
+        }
+        const m1 = b1v / a1v, b1_ = c1v / a1v;
+        const m2 = b2v / a2v, b2_ = c2v / a2v;
+        const A = m1 * m2;
+        const B = m1 * b2_ + m2 * b1_;
+        const C = b1_ * b2_;
+        productSpan.innerText = `y = ${A.toFixed(2)}x² ${B>=0?'+':'-'} ${Math.abs(B).toFixed(2)}x ${C>=0?'+':'-'} ${Math.abs(C).toFixed(2)}`;
+        return (x) => A * x * x + B * x + C;
+    }
+
+    // ----- draw quadratic (progress 0..1) over current x range -----
+    function drawQuadratic(progress = 1.0) {
+        const w = quadCanvas.width, h = quadCanvas.height;
+        drawGrid(ctxQuad, w, h);
+        if (!targetProductFunc) targetProductFunc = updateProductFunction();
+        const f = targetProductFunc;
+        const totalX = X_MAX - X_MIN;
+        const maxX = X_MIN + totalX * progress;
+
+        ctxQuad.beginPath();
+        ctxQuad.strokeStyle = '#b445b0';
+        ctxQuad.lineWidth = 4;
+        ctxQuad.setLineDash([]);
+        let first = true;
+        for (let i = 0; i <= 200; i++) {
+            const t = i / 200;
+            const x = X_MIN + totalX * t;
+            if (x > maxX) break;
+            const y = f(x);
+            if (isFinite(y)) {
+                const cx = mapX(x, w), cy = mapY(y, h);
+                if (first) { ctxQuad.moveTo(cx, cy); first = false; }
+                else { ctxQuad.lineTo(cx, cy); }
+            } else { first = true; }
+        }
+        ctxQuad.stroke();
+
+        if (progress < 1.0) {
+            ctxQuad.save();
+            ctxQuad.strokeStyle = '#aaa';
+            ctxQuad.lineWidth = 2;
+            ctxQuad.setLineDash([6, 4]);
+            ctxQuad.beginPath();
+            first = true;
+            for (let i = 0; i <= 200; i++) {
+                const t = i / 200;
+                const x = X_MIN + totalX * t;
+                if (x <= maxX) continue;
+                const y = f(x);
+                if (isFinite(y)) {
+                    const cx = mapX(x, w), cy = mapY(y, h);
+                    if (first) { ctxQuad.moveTo(cx, cy); first = false; }
+                    else { ctxQuad.lineTo(cx, cy); }
+                } else { first = true; }
+            }
+            ctxQuad.stroke();
+            ctxQuad.restore();
+        }
+
+        // also draw intersection point on quadratic graph
+        drawIntersectionLabel(ctxQuad, w, h);
+    }
+
+    // ----- stop all animations -----
+    function stopAllAnimations() {
+        if (animFrame) cancelAnimationFrame(animFrame);
+        if (linesAnimFrame) cancelAnimationFrame(linesAnimFrame);
+        animFrame = linesAnimFrame = null;
+        isProductAnimating = false;
+        isLinesAnimating = false;
+    }
+
+    // ----- start line animation (0 -> +max, then 0 -> min) -----
+    function startLinesAnimation() {
+        stopAllAnimations();
+        isLinesAnimating = true;
+        linesAnimPhase = 0;
+        linesAnimX = 0;
+        const speed = parseFloat(speedSlider.value);
+        const stepSize = 0.06 * speed;
+        function step() {
+            if (!isLinesAnimating) return;
+            if (linesAnimPhase === 0) {
+                linesAnimX += stepSize;
+                if (linesAnimX >= X_MAX) {
+                    linesAnimX = X_MAX;
+                    drawLinesAnimated(linesAnimX);
+                    linesAnimPhase = 1;
+                    linesAnimX = 0;
+                } else drawLinesAnimated(linesAnimX);
+            } else {
+                linesAnimX -= stepSize;
+                if (linesAnimX <= X_MIN) {
+                    linesAnimX = X_MIN;
+                    drawLinesAnimated(linesAnimX);
+                    isLinesAnimating = false;
+                    linesAnimFrame = null;
+                    lineAnimInfo.innerText = `x: ${linesAnimX.toFixed(2)}  complete`;
+                    return;
+                } else drawLinesAnimated(linesAnimX);
+            }
+            linesAnimFrame = requestAnimationFrame(step);
+        }
+        linesAnimFrame = requestAnimationFrame(step);
+    }
+
+    // ----- start product animation -----
+    function startProductAnimation() {
+        stopAllAnimations();
+        const a1v = parseFloat(a1.value) || 0, a2v = parseFloat(a2.value) || 0;
+        if (Math.abs(a1v) < 1e-12 || Math.abs(a2v) < 1e-12) {
+            alert('Product animation requires both equations to be solvable for y (m₁ ≠ 0).');
+            return;
+        }
+        targetProductFunc = updateProductFunction();
+        productAnimProgress = 0.0;
+        isProductAnimating = true;
+        animIndicator.innerText = '▶️ animating...';
+        const speed = parseFloat(speedSlider.value);
+        function step() {
+            productAnimProgress += 0.015 * speed;
+            if (productAnimProgress >= 1.0) {
+                productAnimProgress = 1.0;
+                drawQuadratic(1.0);
+                isProductAnimating = false;
+                animIndicator.innerText = '✅ complete';
+                animFrame = null;
+                return;
+            }
+            drawQuadratic(productAnimProgress);
+            animFrame = requestAnimationFrame(step);
+        }
+        animFrame = requestAnimationFrame(step);
+    }
+
+    // ----- refresh everything (lines, product, intersection, bounds) -----
+    function refreshAll() {
+        stopAllAnimations();
+        adjustBoundsCentered();   // symmetric around 0, includes quadratic range
+        drawLinesStatic();
+        targetProductFunc = updateProductFunction();
+        drawQuadratic(1.0);
+        animIndicator.innerText = '⏸️ static';
+        lineAnimInfo.innerText = 'x: — , y₁: — , y₂: —';
+    }
+
+    // ----- parse old y=mx+b string and set inputs -----
+    function parseOldFormat(eq) {
+        eq = eq.replace(/\s/g, '');
+        const regex = /^y=([+-]?\d*\.?\d*)?x(?:([+-]\d+\.?\d*))?$/i;
+        const match = eq.match(regex);
+        if (!match) return null;
+        let mStr = match[1];
+        let bStr = match[2];
+        if (mStr === undefined || mStr === '') mStr = '1';
+        else if (mStr === '+') mStr = '1';
+        else if (mStr === '-') mStr = '-1';
+        if (bStr === undefined || bStr === '') bStr = '0';
+        const m = parseFloat(mStr);
+        const b = parseFloat(bStr);
+        if (isNaN(m) || isNaN(b)) return null;
+        return { a: 1, b: m, c: b };   // corresponds to 1*y = m*x + b
+    }
+
+    // load pair from imported item (could be old or new format)
+    function loadPairFromItem(item) {
+        if (item.lines && Array.isArray(item.lines) && item.lines.length >= 2) {
+            // try to parse each line
+            const parsed1 = parseOldFormat(item.lines[0]);
+            const parsed2 = parseOldFormat(item.lines[1]);
+            if (parsed1 && parsed2) {
+                a1.value = parsed1.a; b1.value = parsed1.b; c1.value = parsed1.c;
+                a2.value = parsed2.a; b2.value = parsed2.b; c2.value = parsed2.c;
+                refreshAll();
+                return;
+            }
+        }
+        alert('Could not parse lines. Use format like ["y=2x+3", "y=2x+5"]');
+    }
+
+    // render imported pairs list
+    function renderPairsList() {
+        pairButtonsList.innerHTML = '';
+        if (!importedPairs.length) {
+            pairButtonsList.innerHTML = '<span style="color:#5a6f8a;">— no sets imported —</span>';
+            return;
+        }
+        importedPairs.forEach((pair, idx) => {
+            if (!pair.lines || pair.lines.length < 2) return;
+            const chip = document.createElement('div');
+            chip.className = 'pair-chip';
+            chip.innerText = `${pair.lines[0]}  &  ${pair.lines[1]}`;
+            chip.addEventListener('click', () => loadPairFromItem(pair));
+            pairButtonsList.appendChild(chip);
+        });
+    }
+
+    // ----- event listeners -----
+    drawLinesBtn.addEventListener('click', refreshAll);
+    zoomFitBtn.addEventListener('click', refreshAll);  // same as redraw
+    animateLinesBtn.addEventListener('click', () => {
+        stopAllAnimations();
+        adjustBoundsCentered(); // ensure bounds up to date
+        drawLinesStatic(); // background
+        startLinesAnimation();
+    });
+    calcProductBtn.addEventListener('click', startProductAnimation);
+
+    exportBtn.addEventListener('click', () => {
+        const data = {
+            line1: { a: parseFloat(a1.value) || 0, b: parseFloat(b1.value) || 0, c: parseFloat(c1.value) || 0 },
+            line2: { a: parseFloat(a2.value) || 0, b: parseFloat(b2.value) || 0, c: parseFloat(c2.value) || 0 }
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'linear_general_pair.json'; a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    importFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const json = JSON.parse(ev.target.result);
+                if (Array.isArray(json)) {
+                    importedPairs = json;
+                    renderPairsList();
+                } else {
+                    alert('JSON must be an array of { lines: [eq1, eq2] }');
+                }
+            } catch (err) { alert('invalid JSON: ' + err); }
+            importFile.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    speedSlider.addEventListener('input', () => { speedValue.innerText = speedSlider.value; });
+
+    // initial load
+    refreshAll();
+    speedValue.innerText = speedSlider.value;
 })();
+</script>
+</body>
+</html>
