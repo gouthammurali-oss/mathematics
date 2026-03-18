@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>quadratic visible · intersection on both graphs</title>
+    <title>quadratic · manual step & range</title>
     <style>
         * { box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
         body { background: #eef2f7; margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
@@ -28,7 +28,10 @@
         .button-strip button.primary { background: #162e4a; color: white; border-color: #0a1a2c; }
         .button-strip button.primary:hover { background: #23456b; }
         .button-strip button:hover { background: #ebf0f8; border-color: #8f9fb8; }
-        .speed-control { display: flex; align-items: center; gap: 15px; background: #ffffffb8; padding: 8px 22px; border-radius: 40px; border: 1px solid #b7c3d4; }
+        .speed-control, .grid-step-control { display: flex; align-items: center; gap: 15px; background: #ffffffb8; padding: 8px 22px; border-radius: 40px; border: 1px solid #b7c3d4; }
+        .grid-step-control { flex-wrap: wrap; }
+        .grid-step-control label { display: flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; }
+        .grid-step-control input { width: 70px; padding: 6px 10px; border-radius: 30px; border: 1px solid #8f9fb8; text-align: center; }
         .speed-control label { font-weight: 600; color: #1e2e47; }
         .speed-control input { width: 160px; }
         #speedValue { font-weight: 600; min-width: 40px; display: inline-block; color: #162e4a; }
@@ -53,10 +56,10 @@
 </head>
 <body>
 <div class="app">
-    <h1>✖️ visible quadratic · intersection on both</h1>
-    <div class="sub">m₁·y = m₂·x + c  &nbsp; | &nbsp; dynamic grid, axes with tick marks</div>
+    <h1>✖️ quadratic · manual step & range</h1>
+    <div class="sub">m₁·y = m₂·x + c  &nbsp; | &nbsp; set X/Y step and max (symmetric)</div>
 
-    <!-- line editors with three parameters -->
+    <!-- line editors -->
     <div class="equation-row">
         <div class="line-editor">
             <h2><span>1</span> line 1</h2>
@@ -84,13 +87,13 @@
         <span class="coord" id="intersectX">x = —</span>
         <span class="coord" id="intersectY">y = —</span>
         <span class="warning" id="parallelMsg"></span>
-        <button id="zoomFitBtn" class="primary" style="margin-left:auto;">⤢ center & fit all</button>
+        <button id="zoomFitBtn" class="primary" style="margin-left:auto;">⤢ auto fit (overrides manual)</button>
     </div>
 
-    <!-- control panel -->
+    <!-- control panel with grid step and max inputs -->
     <div class="control-panel">
         <div class="button-strip">
-            <button id="drawLinesBtn" class="primary">📈 redraw & scale</button>
+            <button id="drawLinesBtn" class="primary">📈 redraw (keep manual)</button>
             <button id="animateLinesBtn" class="primary">▶ animate lines (0→+) (0→-)</button>
             <button id="calcProductBtn" class="primary">✨ animate product curve*</button>
             <button id="exportBtn">⬇️ export current pair</button>
@@ -101,12 +104,20 @@
             <label>speed <span id="speedValue">1.0</span></label>
             <input type="range" id="speedSlider" min="0.2" max="3.0" step="0.1" value="1.0">
         </div>
+        <!-- grid step and max controls (defaults: step=1, max=5) -->
+        <div class="grid-step-control">
+            <label>X step: <input type="number" id="xStepInput" value="1" step="any" min="0.1"></label>
+            <label>X max: <input type="number" id="xMaxInput" value="5" step="any" min="0.1"></label>
+            <label>Y step: <input type="number" id="yStepInput" value="1" step="any" min="0.1"></label>
+            <label>Y max: <input type="number" id="yMaxInput" value="5" step="any" min="0.1"></label>
+            <button id="applyGridBtn" class="primary" style="padding:8px 18px;">apply</button>
+        </div>
     </div>
 
     <!-- two graphs -->
     <div class="graph-pair">
         <div class="graph-card">
-            <h3>📉 two lines (origin centered)</h3>
+            <h3>📉 two lines (symmetric axes)</h3>
             <canvas id="linearCanvas" width="500" height="400"></canvas>
             <div class="graph-footer">
                 <span>L₁: <span id="eq1Display">1.0 y = 1.0 x + 0.0</span></span>
@@ -124,7 +135,7 @@
         </div>
     </div>
 
-    <!-- imported pairs container (clickable) -->
+    <!-- imported pairs container -->
     <div class="pairs-container" id="pairsContainer">
         <h4>📋 click any imported pair to load (supports old y=mx+b format)</h4>
         <div class="pair-buttons" id="pairButtonsList">
@@ -132,7 +143,7 @@
         </div>
     </div>
 
-    <footer>* product uses y = (m₂/m₁)x + c/m₁  (only if m₁≠0) | axes have tick marks at dynamic intervals</footer>
+    <footer>* product uses y = (m₂/m₁)x + c/m₁  (only if m₁≠0) | "Auto fit" ignores manual max, "apply" uses your step & max</footer>
 </div>
 
 <script>
@@ -161,10 +172,20 @@
     const importFile = document.getElementById('importFile');
     const zoomFitBtn = document.getElementById('zoomFitBtn');
     const pairButtonsList = document.getElementById('pairButtonsList');
+    // grid controls
+    const xStepInput = document.getElementById('xStepInput');
+    const xMaxInput = document.getElementById('xMaxInput');
+    const yStepInput = document.getElementById('yStepInput');
+    const yMaxInput = document.getElementById('yMaxInput');
+    const applyGridBtn = document.getElementById('applyGridBtn');
 
-    // Dynamic bounds (symmetric around 0)
-    let X_MAX = 5, Y_MAX = 5;   // half-ranges
-    let X_MIN = -5, Y_MIN = -5;
+    // Dynamic bounds – will be set by manual or auto
+    let X_MIN = -5, X_MAX = 5, Y_MIN = -5, Y_MAX = 5;
+
+    // User defined grid parameters (manual mode)
+    let userXStep = 1, userYStep = 1;          // step
+    let userXMax = 5, userYMax = 5;            // positive max (symmetric)
+    let manualMode = true;                       // true = use userXMax/YMax; false = auto fit
 
     // Intersection point
     let intersection = { x: null, y: null, valid: false };
@@ -178,7 +199,7 @@
     // Imported pairs
     let importedPairs = [];
 
-    // ----- helpers: map coordinates to canvas (using current bounds) -----
+    // ----- helpers: map coordinates to canvas -----
     function mapX(coordX, w) { return ((coordX - X_MIN) / (X_MAX - X_MIN)) * w; }
     function mapY(coordY, h) { return h * (1 - (coordY - Y_MIN) / (Y_MAX - Y_MIN)); }
 
@@ -191,7 +212,6 @@
         const b2v = parseFloat(b2.value) || 0;
         const c2v = parseFloat(c2.value) || 0;
 
-        // system: -b1*x + a1*y = c1   ;   -b2*x + a2*y = c2
         const det = a1v * b2v - a2v * b1v;
         if (Math.abs(det) < 1e-12) {
             intersection.valid = false;
@@ -207,7 +227,7 @@
         intersectYSpan.innerText = `y = ${y.toFixed(3)}`;
     }
 
-    // ----- nice step for grid -----
+    // ----- nice step for grid (fallback when step=0, not used now) -----
     function niceStep(range, approxSteps = 8) {
         const roughStep = range / approxSteps;
         const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
@@ -218,138 +238,131 @@
         return 10 * magnitude;
     }
 
-    // ----- adjust bounds to symmetric around 0, including intersection and quadratic curve -----
-    function adjustBoundsCentered() {
-        computeIntersection();  // refresh intersection
-
-        // start with default half-ranges
-        let requiredX = 5;
-        let requiredY = 5;
-
-        if (intersection.valid) {
-            requiredX = Math.max(requiredX, Math.abs(intersection.x) + 1.5);
-            requiredY = Math.max(requiredY, Math.abs(intersection.y) + 1.5);
-        }
-
-        // consider quadratic curve range (if both lines are solvable for y)
-        const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
-        const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
-
-        if (Math.abs(a1v) > 1e-12 && Math.abs(a2v) > 1e-12) {
-            const m1 = b1v / a1v, b1_ = c1v / a1v;
-            const m2 = b2v / a2v, b2_ = c2v / a2v;
-            const A = m1 * m2;
-            const B = m1 * b2_ + m2 * b1_;
-            const C = b1_ * b2_;
-
-            // also include vertex x to possibly expand x range
-            if (Math.abs(A) > 1e-12) {
-                const vertexX = -B / (2 * A);
-                if (isFinite(vertexX)) {
-                    requiredX = Math.max(requiredX, Math.abs(vertexX) + 1.5);
+    // ----- set bounds based on manual or auto -----
+    function setBounds() {
+        if (!manualMode) {
+            // auto fit: compute required ranges
+            computeIntersection();
+            let requiredX = 5;
+            let requiredY = 5;
+            if (intersection.valid) {
+                requiredX = Math.max(requiredX, Math.abs(intersection.x) + 1.5);
+                requiredY = Math.max(requiredY, Math.abs(intersection.y) + 1.5);
+            }
+            const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
+            const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
+            if (Math.abs(a1v) > 1e-12 && Math.abs(a2v) > 1e-12) {
+                const m1 = b1v / a1v, b1_ = c1v / a1v;
+                const m2 = b2v / a2v, b2_ = c2v / a2v;
+                const A = m1 * m2;
+                const B = m1 * b2_ + m2 * b1_;
+                const C = b1_ * b2_;
+                if (Math.abs(A) > 1e-12) {
+                    const vertexX = -B / (2 * A);
+                    if (isFinite(vertexX)) {
+                        requiredX = Math.max(requiredX, Math.abs(vertexX) + 1.5);
+                    }
                 }
-            }
-
-            // now set X range based on requiredX
-            X_MAX = requiredX;
-            X_MIN = -requiredX;
-
-            // evaluate y at key points to expand Y range
-            let yMin = Infinity, yMax = -Infinity;
-            const evalX = [X_MIN, X_MAX, 0];
-            if (intersection.valid && intersection.x >= X_MIN && intersection.x <= X_MAX) {
-                evalX.push(intersection.x);
-            }
-            for (let x of evalX) {
-                const y = A*x*x + B*x + C;
-                if (isFinite(y)) {
-                    yMin = Math.min(yMin, y);
-                    yMax = Math.max(yMax, y);
+                // evaluate y at key points to expand Y range
+                let yMin = Infinity, yMax = -Infinity;
+                const evalX = [-requiredX, requiredX, 0];
+                if (intersection.valid && intersection.x >= -requiredX && intersection.x <= requiredX) {
+                    evalX.push(intersection.x);
                 }
-            }
-            // vertex if within x range
-            if (Math.abs(A) > 1e-12) {
-                const vertexX = -B / (2 * A);
-                if (vertexX >= X_MIN && vertexX <= X_MAX) {
-                    const y = A*vertexX*vertexX + B*vertexX + C;
+                for (let x of evalX) {
+                    const y = A*x*x + B*x + C;
                     if (isFinite(y)) {
                         yMin = Math.min(yMin, y);
                         yMax = Math.max(yMax, y);
                     }
                 }
+                if (Math.abs(A) > 1e-12) {
+                    const vertexX = -B / (2 * A);
+                    if (vertexX >= -requiredX && vertexX <= requiredX) {
+                        const y = A*vertexX*vertexX + B*vertexX + C;
+                        if (isFinite(y)) {
+                            yMin = Math.min(yMin, y);
+                            yMax = Math.max(yMax, y);
+                        }
+                    }
+                }
+                if (isFinite(yMin) && isFinite(yMax)) {
+                    requiredY = Math.max(requiredY, Math.max(Math.abs(yMin), Math.abs(yMax)) + 1.5);
+                }
             }
-
-            if (isFinite(yMin) && isFinite(yMax)) {
-                requiredY = Math.max(requiredY, Math.max(Math.abs(yMin), Math.abs(yMax)) + 1.5);
-            }
+            X_MAX = requiredX;
+            X_MIN = -requiredX;
+            Y_MAX = requiredY;
+            Y_MIN = -requiredY;
+        } else {
+            // manual mode: use userXMax, userYMax (positive)
+            X_MAX = userXMax;
+            X_MIN = -userXMax;
+            Y_MAX = userYMax;
+            Y_MIN = -userYMax;
         }
-
-        X_MAX = requiredX;
-        X_MIN = -requiredX;
-        Y_MAX = requiredY;
-        Y_MIN = -requiredY;
     }
 
-    // ----- draw grid with dynamic steps and tick marks on axes -----
+    // ----- draw grid with user steps -----
     function drawGrid(ctx, w, h) {
         ctx.clearRect(0, 0, w, h);
         ctx.save();
+
+        // Use user steps (always positive)
+        const gridXStep = userXStep;
+        const gridYStep = userYStep;
 
         // Draw grid lines (light)
         ctx.strokeStyle = '#dee6f2';
         ctx.lineWidth = 0.8;
 
-        const xStep = niceStep(X_MAX - X_MIN, 8);
-        for (let x = Math.ceil(X_MIN / xStep) * xStep; x <= X_MAX; x += xStep) {
-            if (Math.abs(x) < 0.001) continue; // skip zero line (will be drawn as axis)
+        // X grid lines
+        for (let x = Math.ceil(X_MIN / gridXStep) * gridXStep; x <= X_MAX; x += gridXStep) {
+            if (Math.abs(x) < 0.001) continue;
             const cx = mapX(x, w);
             ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
         }
 
-        const yStep = niceStep(Y_MAX - Y_MIN, 8);
-        for (let y = Math.ceil(Y_MIN / yStep) * yStep; y <= Y_MAX; y += yStep) {
+        // Y grid lines
+        for (let y = Math.ceil(Y_MIN / gridYStep) * gridYStep; y <= Y_MAX; y += gridYStep) {
             if (Math.abs(y) < 0.001) continue;
             const cy = mapY(y, h);
             ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
         }
 
-        // Draw axes (thick, black)
+        // Draw axes (thick)
         ctx.beginPath(); ctx.lineWidth = 2.2; ctx.strokeStyle = '#2f405c';
         const yZero = mapY(0, h), xZero = mapX(0, w);
         ctx.moveTo(0, yZero); ctx.lineTo(w, yZero);
         ctx.moveTo(xZero, 0); ctx.lineTo(xZero, h);
         ctx.stroke();
 
-        // Draw tick marks on axes
+        // Draw tick marks and labels
         ctx.fillStyle = '#2f405c';
         ctx.font = '12px "Fira Code", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
 
-        // X-axis ticks and labels
-        for (let x = Math.ceil(X_MIN / xStep) * xStep; x <= X_MAX; x += xStep) {
-            if (Math.abs(x) < 0.001) continue; // skip zero (already labeled by intersection maybe)
+        // X ticks and labels
+        for (let x = Math.ceil(X_MIN / gridXStep) * gridXStep; x <= X_MAX; x += gridXStep) {
+            if (Math.abs(x) < 0.001) continue;
             const cx = mapX(x, w);
-            // tick above axis (since axis is at yZero)
-            ctx.beginPath(); ctx.moveTo(cx, yZero - 5); ctx.lineTo(cx, yZero + 5); ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
-            // label
-            ctx.fillStyle = '#2f405c';
-            ctx.fillText(x.toFixed(xStep < 0.1 ? 2 : 0), cx, yZero + 8);
+            ctx.beginPath(); ctx.moveTo(cx, yZero - 5); ctx.lineTo(cx, yZero + 5);
+            ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.fillText(x.toFixed(gridXStep < 0.1 ? 2 : 0), cx, yZero + 8);
         }
 
-        // Y-axis ticks and labels
-        for (let y = Math.ceil(Y_MIN / yStep) * yStep; y <= Y_MAX; y += yStep) {
+        // Y ticks and labels
+        for (let y = Math.ceil(Y_MIN / gridYStep) * gridYStep; y <= Y_MAX; y += gridYStep) {
             if (Math.abs(y) < 0.001) continue;
             const cy = mapY(y, h);
-            // tick right of axis
-            ctx.beginPath(); ctx.moveTo(xZero - 5, cy); ctx.lineTo(xZero + 5, cy); ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
-            // label (to the left for negative x, right for positive? just left if room)
-            ctx.fillStyle = '#2f405c';
+            ctx.beginPath(); ctx.moveTo(xZero - 5, cy); ctx.lineTo(xZero + 5, cy);
+            ctx.strokeStyle = '#2f405c'; ctx.lineWidth = 1.5; ctx.stroke();
             ctx.textAlign = 'right';
-            ctx.fillText(y.toFixed(yStep < 0.1 ? 2 : 0), xZero - 10, cy - 6);
+            ctx.fillText(y.toFixed(gridYStep < 0.1 ? 2 : 0), xZero - 10, cy - 6);
         }
 
-        // Label origin (0) once
+        // Label origin
         ctx.fillStyle = '#2f405c';
         ctx.textAlign = 'right';
         ctx.fillText('0', xZero - 8, yZero - 8);
@@ -364,7 +377,6 @@
         ctx.lineWidth = 3.2;
         ctx.setLineDash(dash ? [8, 5] : []);
         if (Math.abs(a) > 1e-12) {
-            // y = (b/a)x + c/a
             const slope = b / a;
             const intercept = c / a;
             const x1 = X_MIN, y1 = slope * x1 + intercept;
@@ -374,7 +386,6 @@
             ctx.lineTo(mapX(x2, w), mapY(y2, h));
             ctx.stroke();
         } else {
-            // vertical line: b*x + c = 0   => x = -c/b   (b != 0)
             if (Math.abs(b) > 1e-12) {
                 const xVert = -c / b;
                 if (xVert >= X_MIN && xVert <= X_MAX) {
@@ -384,7 +395,7 @@
                     ctx.lineTo(cx, h);
                     ctx.stroke();
                 }
-            } // else degenerate, nothing
+            }
         }
         ctx.restore();
     }
@@ -394,7 +405,6 @@
         if (!intersection.valid) return;
         const x = intersection.x, y = intersection.y;
         const cx = mapX(x, w), cy = mapY(y, h);
-        // draw small circle
         ctx.beginPath();
         ctx.fillStyle = '#000';
         ctx.arc(cx, cy, 6, 0, 2*Math.PI);
@@ -430,14 +440,12 @@
         const a1v = parseFloat(a1.value) || 0, b1v = parseFloat(b1.value) || 0, c1v = parseFloat(c1.value) || 0;
         const a2v = parseFloat(a2.value) || 0, b2v = parseFloat(b2.value) || 0, c2v = parseFloat(c2.value) || 0;
 
-        // draw full lines faintly
         ctxLin.save();
         ctxLin.globalAlpha = 0.2;
         plotLine(ctxLin, a1v, b1v, c1v, '#888', false, w, h);
         plotLine(ctxLin, a2v, b2v, c2v, '#888', true, w, h);
         ctxLin.restore();
 
-        // draw animated segment from 0 to currentX (solid)
         ctxLin.save();
         ctxLin.lineWidth = 4;
         ctxLin.setLineDash([]);
@@ -450,11 +458,8 @@
             ctxLin.moveTo(mapX(0, w), mapY(yStart, h));
             ctxLin.lineTo(mapX(currentX, w), mapY(yEnd, h));
             ctxLin.stroke();
-            // dot at current
             ctxLin.beginPath(); ctxLin.fillStyle = '#c2314a';
             ctxLin.arc(mapX(currentX, w), mapY(yEnd, h), 6, 0, 2*Math.PI); ctxLin.fill();
-        } else if (Math.abs(b1v) > 1e-12) {
-            // vertical line – animation not really applicable, skip or draw point
         }
 
         if (Math.abs(a2v) > 1e-12) {
@@ -471,10 +476,8 @@
         }
         ctxLin.restore();
 
-        // always draw intersection label
         drawIntersectionLabel(ctxLin, w, h);
 
-        // update info
         let y1 = '?', y2 = '?';
         if (Math.abs(a1v) > 1e-12) y1 = ((b1v/a1v)*currentX + c1v/a1v).toFixed(2);
         if (Math.abs(a2v) > 1e-12) y2 = ((b2v/a2v)*currentX + c2v/a2v).toFixed(2);
@@ -498,7 +501,7 @@
         return (x) => A * x * x + B * x + C;
     }
 
-    // ----- draw quadratic (progress 0..1) over current x range -----
+    // ----- draw quadratic (progress 0..1) -----
     function drawQuadratic(progress = 1.0) {
         const w = quadCanvas.width, h = quadCanvas.height;
         drawGrid(ctxQuad, w, h);
@@ -547,7 +550,6 @@
             ctxQuad.restore();
         }
 
-        // also draw intersection point on quadratic graph
         drawIntersectionLabel(ctxQuad, w, h);
     }
 
@@ -560,7 +562,7 @@
         isLinesAnimating = false;
     }
 
-    // ----- start line animation (0 -> +max, then 0 -> min) -----
+    // ----- start line animation -----
     function startLinesAnimation() {
         stopAllAnimations();
         isLinesAnimating = true;
@@ -623,15 +625,40 @@
         animFrame = requestAnimationFrame(step);
     }
 
-    // ----- refresh everything (lines, product, intersection, bounds) -----
+    // ----- refresh everything (lines, product, intersection) using current bounds -----
     function refreshAll() {
         stopAllAnimations();
-        adjustBoundsCentered();   // symmetric around 0, includes quadratic range
+        setBounds();               // compute X_MIN..Y_MAX based on manualMode flag
+        computeIntersection();     // recalc intersection (needs bounds? no, but updates display)
         drawLinesStatic();
         targetProductFunc = updateProductFunction();
         drawQuadratic(1.0);
         animIndicator.innerText = '⏸️ static';
         lineAnimInfo.innerText = 'x: — , y₁: — , y₂: —';
+    }
+
+    // ----- apply manual grid settings from inputs -----
+    function applyManualSettings() {
+        // read step values (must be >0, else fallback to 1)
+        let xs = parseFloat(xStepInput.value);
+        let ys = parseFloat(yStepInput.value);
+        userXStep = (isNaN(xs) || xs <= 0) ? 1 : xs;
+        userYStep = (isNaN(ys) || ys <= 0) ? 1 : ys;
+
+        // read max values (must be >0, else fallback to 5)
+        let xm = parseFloat(xMaxInput.value);
+        let ym = parseFloat(yMaxInput.value);
+        userXMax = (isNaN(xm) || xm <= 0) ? 5 : xm;
+        userYMax = (isNaN(ym) || ym <= 0) ? 5 : ym;
+
+        manualMode = true;          // switch to manual
+        refreshAll();               // redraw with new manual bounds and steps
+    }
+
+    // ----- switch to auto fit (overrides manual) -----
+    function autoFit() {
+        manualMode = false;
+        refreshAll();
     }
 
     // ----- parse old y=mx+b string and set inputs -----
@@ -649,18 +676,18 @@
         const m = parseFloat(mStr);
         const b = parseFloat(bStr);
         if (isNaN(m) || isNaN(b)) return null;
-        return { a: 1, b: m, c: b };   // corresponds to 1*y = m*x + b
+        return { a: 1, b: m, c: b };
     }
 
-    // load pair from imported item (could be old or new format)
+    // load pair from imported item
     function loadPairFromItem(item) {
         if (item.lines && Array.isArray(item.lines) && item.lines.length >= 2) {
-            // try to parse each line
             const parsed1 = parseOldFormat(item.lines[0]);
             const parsed2 = parseOldFormat(item.lines[1]);
             if (parsed1 && parsed2) {
                 a1.value = parsed1.a; b1.value = parsed1.b; c1.value = parsed1.c;
                 a2.value = parsed2.a; b2.value = parsed2.b; c2.value = parsed2.c;
+                // after loading, keep current mode (manual/auto) and refresh
                 refreshAll();
                 return;
             }
@@ -686,12 +713,12 @@
     }
 
     // ----- event listeners -----
-    drawLinesBtn.addEventListener('click', refreshAll);
-    zoomFitBtn.addEventListener('click', refreshAll);  // same as redraw
+    drawLinesBtn.addEventListener('click', refreshAll);      // redraw with current mode
+    zoomFitBtn.addEventListener('click', autoFit);           // switch to auto fit
     animateLinesBtn.addEventListener('click', () => {
         stopAllAnimations();
-        adjustBoundsCentered(); // ensure bounds up to date
-        drawLinesStatic(); // background
+        setBounds();            // ensure bounds are up to date
+        drawLinesStatic();
         startLinesAnimation();
     });
     calcProductBtn.addEventListener('click', startProductAnimation);
@@ -729,9 +756,12 @@
 
     speedSlider.addEventListener('input', () => { speedValue.innerText = speedSlider.value; });
 
-    // initial load
-    refreshAll();
-    speedValue.innerText = speedSlider.value;
+    // apply button: read inputs, set manual mode, refresh
+    applyGridBtn.addEventListener('click', applyManualSettings);
+
+    // initial load: manual mode with defaults (step=1, max=5)
+    // inputs already have these values
+    applyManualSettings();  // this sets userXStep etc. and refreshes
 })();
 </script>
 </body>
